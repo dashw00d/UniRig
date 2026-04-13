@@ -3,25 +3,24 @@ from torch.optim import Optimizer
 from lightning.pytorch import LightningModule
 from lightning.pytorch.callbacks import BasePredictionWriter
 
-from .ar import ARSystem, ARWriter
-from .skin import SkinSystem, SkinWriter
-
 def get_system(**kwargs) -> LightningModule:
-    MAP = {
-        'ar': ARSystem,
-        'skin': SkinSystem,
-    }
     __target__ = kwargs['__target__']
-    assert __target__ in MAP, f"expect: [{','.join(MAP.keys())}], found: {__target__}"
     del kwargs['__target__']
-    return MAP[__target__](**kwargs)
+    if __target__ == 'ar':
+        from .ar import ARSystem
+        return ARSystem(**kwargs)
+    if __target__ == 'skin':
+        from .skin import SkinSystem
+        return SkinSystem(**kwargs)
+    raise AssertionError(f"expect: [ar,skin], found: {__target__}")
 
 def get_writer(**kwargs) -> BasePredictionWriter:
-    MAP = {
-        'ar': ARWriter,
-        'skin': SkinWriter,
-    }
     __target__ = kwargs['__target__']
-    assert __target__ in MAP, f"expect: [{','.join(MAP.keys())}], found: {__target__}"
     del kwargs['__target__']
-    return MAP[__target__](**kwargs)
+    if __target__ == 'ar':
+        from .ar import ARWriter
+        return ARWriter(**kwargs)
+    if __target__ == 'skin':
+        from .skin import SkinWriter
+        return SkinWriter(**kwargs)
+    raise AssertionError(f"expect: [ar,skin], found: {__target__}")
