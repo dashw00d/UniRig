@@ -25,10 +25,14 @@ import torch.nn as nn
 from typing import Optional, Union
 from einops import repeat
 import math
-from torch_cluster import fps
 import random
 import time
 import numpy as np
+
+try:
+    from torch_cluster import fps
+except ImportError:
+    fps = None
 
 from ..modules import checkpoint
 from ..modules.embedder import FourierEmbedder
@@ -38,6 +42,25 @@ from ..modules.transformer_blocks import (
 )
 
 from .tsal_base import ShapeAsLatentModule
+
+
+def sample_point_indices(pos: torch.Tensor, batch: torch.Tensor, ratio: float, random_start: bool) -> torch.Tensor:
+    if fps is not None:
+        return fps(pos, batch, ratio=ratio, random_start=random_start)
+
+    unique_batches = torch.unique_consecutive(batch)
+    per_batch_indices = []
+    for batch_id in unique_batches.tolist():
+        current = torch.nonzero(batch == batch_id, as_tuple=False).flatten()
+        num_points = current.numel()
+        target = max(1, int(round(num_points * ratio)))
+        if target >= num_points:
+            per_batch_indices.append(current)
+            continue
+        chosen = torch.linspace(0, num_points - 1, steps=target, device=pos.device)
+        chosen = torch.unique(chosen.round().long(), sorted=True)
+        per_batch_indices.append(current[chosen])
+    return torch.cat(per_batch_indices, dim=0)
 
 
 class CrossAttentionEncoder(nn.Module):
@@ -157,7 +180,7 @@ class CrossAttentionEncoder(nn.Module):
             batch = torch.arange(B).to(pc.device)
             batch = torch.repeat_interleave(batch, N)
 
-            idx = fps(pos, batch, ratio=1. / 4, random_start=self.training)
+            idx = sample_point_indices(pos, batch, ratio=1. / 4, random_start=self.training)
 
             sampled_pc = pos[idx]
             sampled_pc = sampled_pc.view(B, -1, 3)
